@@ -77,6 +77,49 @@ def test_status_transition_records_completed_at(api, make_task):
     assert data["completed_at"] is None
 
 
+def test_manual_completion_uses_local_business_day(api, make_task):
+    """手动标记完成：完成时间取操作当天的本地零点，不再写 UTC 当前时刻。"""
+
+    task = make_task()
+    data = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status",
+                              {"status": "completed"}))
+    assert data["completed_at"] == f"{date.today():%Y-%m-%d} 00:00:00"
+
+
+def test_create_completed_task_uses_business_day(api, make_space):
+    """登记时直接置为已完成，同样按业务日期口径写入完成时间。"""
+
+    space = make_space()
+    data = api.data(api.post("/api/v1/maintenance-tasks",
+                             task_payload(space.id, status="completed")), 201)
+    assert data["completed_at"] == f"{date.today():%Y-%m-%d} 00:00:00"
+
+
+def test_manual_completion_prefers_latest_record_date(api, make_task, make_record):
+    """有养护记录的任务，完成时间以最新作业日期为准，与记录联动口径一致。"""
+
+    task = make_task()
+    make_record(task=task, quality_result="pending", record_date=date(2026, 3, 12))
+    make_record(task=task, quality_result="pending", record_date=date(2026, 3, 15))
+
+    data = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status",
+                              {"status": "completed"}))
+    assert data["completed_at"] == "2026-03-15 00:00:00"
+
+
+def test_recomplete_keeps_existing_completed_at(api, make_task, make_record):
+    """已完成任务再次标记完成，不覆盖已写入的完成时间（历史口径不被改写）。"""
+
+    task = make_task()
+    make_record(task=task, quality_result="qualified", record_date=date(2026, 3, 12))
+    detail = api.data(api.get(f"/api/v1/maintenance-tasks/{task.id}"))
+    assert detail["completed_at"] == "2026-03-12 00:00:00"
+
+    again = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status",
+                               {"status": "completed"}))
+    assert again["completed_at"] == "2026-03-12 00:00:00"
+
+
 def test_cannot_complete_task_with_unqualified_record(api, make_task, make_record):
     task = make_task()
     make_record(task=task, quality_result="unqualified")

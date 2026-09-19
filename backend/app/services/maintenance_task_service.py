@@ -7,8 +7,7 @@ from ..errors import ConflictError, ValidationError
 from ..extensions import db
 from ..models import GreenSpace, MaintenanceRecord, MaintenanceTask, PlantReplacement
 from ..models.maintenance_task import OPEN_STATUSES
-from ..models.mixins import utcnow
-from ..utils.dates import format_date, today
+from ..utils.dates import day_start, format_date, today
 from ..utils.numbers import to_float
 from ..utils.sorting import parse_sort
 from .base_service import BaseService
@@ -44,12 +43,29 @@ class MaintenanceTaskService(BaseService):
             raise ConflictError(f"绿地「{space.name}」已归档，不能再登记养护任务")
 
     @classmethod
+    def _completion_day_start(cls, task):
+        """完成时间统一口径：业务完成日期的本地零点。
+
+        有养护记录的任务以最新作业日期为准，无记录的任务以操作当天为准；
+        不再写入 UTC 当前时刻，保证与按业务日期归月的统计口径一致。
+        """
+
+        latest = None
+        if task.id is not None:
+            latest = (
+                db.session.query(func.max(MaintenanceRecord.record_date))
+                .filter(MaintenanceRecord.task_id == task.id)
+                .scalar()
+            )
+        return day_start(latest)
+
+    @classmethod
     def apply_derived(cls, instance):
         """状态与完成时间保持一致：完成即写入完成时间，撤销完成即清空。"""
 
         if instance.status == "completed":
             if instance.completed_at is None:
-                instance.completed_at = utcnow()
+                instance.completed_at = cls._completion_day_start(instance)
         else:
             instance.completed_at = None
 
@@ -162,7 +178,8 @@ class MaintenanceTaskService(BaseService):
         """手动流转任务状态。
 
         规则：存在不合格养护记录时不允许直接标记完成，需先整改；
-        标记完成会写入完成时间，撤销完成则清空完成时间。
+        标记完成按统一口径写入完成时间（已有完成时间则不覆盖），
+        撤销完成则清空完成时间。
         """
 
         task = cls.get(obj_id)
@@ -184,7 +201,7 @@ class MaintenanceTaskService(BaseService):
                 raise ConflictError(
                     f"该任务存在 {unqualified} 条不合格养护记录，请整改复检合格后再标记完成"
                 )
-            task.completed_at = task.completed_at or utcnow()
+            task.completed_at = task.completed_at or cls._completion_day_start(task)
         else:
             task.completed_at = None
 

@@ -21,7 +21,7 @@
         <el-descriptions-item label="任务状态">
           <EnumTag group="task_status" :value="detail.status" :label="detail.status_label" />
         </el-descriptions-item>
-        <el-descriptions-item label="完成时间">{{ formatDateTime(detail.completed_at) }}</el-descriptions-item>
+        <el-descriptions-item label="完成日期">{{ formatDate(detail.completed_at) }}</el-descriptions-item>
         <el-descriptions-item label="任务说明" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
       </el-descriptions>
 
@@ -69,7 +69,7 @@ import { ElMessage } from 'element-plus'
 import { maintenanceTaskApi } from '@/api'
 import EnumTag from '@/components/common/EnumTag.vue'
 import StatCard from '@/components/common/StatCard.vue'
-import { formatCurrency, formatDate, formatDateTime, formatHours, formatNumber } from '@/utils/format'
+import { formatCurrency, formatDate, formatHours, formatNumber } from '@/utils/format'
 
 const emit = defineEmits(['updated'])
 const router = useRouter()

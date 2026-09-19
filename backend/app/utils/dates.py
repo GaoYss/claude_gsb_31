@@ -1,6 +1,6 @@
 """日期解析与序列化辅助。"""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 
 def parse_date(value, field_label="日期"):
@@ -42,3 +42,16 @@ def format_datetime(value):
 
 def today():
     return datetime.now().date()
+
+
+def day_start(value=None):
+    """本地某日的零点（naive datetime），默认今天。
+
+    完成时间等业务日期口径统一使用它，避免与 UTC 当前时刻混用。
+    """
+
+    if value is None:
+        value = today()
+    if isinstance(value, datetime):
+        value = value.date()
+    return datetime.combine(value, time.min)

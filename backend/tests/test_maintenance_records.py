@@ -63,7 +63,8 @@ def test_qualified_record_completes_task(api, make_task):
     })
     detail = api.data(api.get(f"/api/v1/maintenance-tasks/{task.id}"))
     assert detail["status"] == "completed"
-    assert detail["completed_at"].startswith("2026-03-12")
+    # 完成时间统一口径：最新作业日期的本地零点
+    assert detail["completed_at"] == "2026-03-12 00:00:00"
 
 
 def test_unqualified_record_blocks_task_completion(api, make_task):

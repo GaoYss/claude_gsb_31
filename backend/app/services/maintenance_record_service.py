@@ -1,14 +1,12 @@
 """养护记录业务逻辑。"""
 
-from datetime import datetime, time
-
 from sqlalchemy import func, or_
 
 from ..constants import QUALITY_RESULT
 from ..errors import ConflictError, ValidationError
 from ..extensions import db
 from ..models import GreenSpace, MaintenanceRecord, MaintenanceTask, PlantReplacement
-from ..utils.dates import format_date
+from ..utils.dates import day_start, format_date
 from ..utils.numbers import to_float
 from ..utils.sorting import parse_sort
 from .base_service import BaseService
@@ -21,7 +19,8 @@ class MaintenanceRecordService(BaseService):
     与养护任务的联动规则（在同一个事务内完成）：
 
     1. 任务处于「待执行」时登记记录，任务自动转为「进行中」；
-    2. 任务存在合格记录且没有不合格记录时，任务自动转为「已完成」；
+    2. 任务存在合格记录且没有不合格记录时，任务自动转为「已完成」，
+       完成时间取最新作业日期的本地零点（与手动完成的口径一致）；
     3. 存在不合格记录时任务保持「进行中」，等待整改复检；
     4. 删除记录后重新推算任务状态，避免出现「已完成但没有记录」的脏数据；
     5. 已取消的任务不允许再补录记录。
@@ -111,7 +110,7 @@ class MaintenanceRecordService(BaseService):
         if qualified and not unqualified:
             task.status = "completed"
             latest = max(item.record_date for item in records)
-            task.completed_at = datetime.combine(latest, time.min)
+            task.completed_at = day_start(latest)
         else:
             task.status = "in_progress"
             task.completed_at = None
