@@ -70,11 +70,36 @@ def test_status_transition_records_completed_at(api, make_task):
 
     data = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status", {"status": "completed"}))
     assert data["status"] == "completed"
-    assert data["completed_at"] is not None
+    # 完成时间统一为日期口径：操作当天零点，不写具体时分秒
+    assert data["completed_at"] == f"{date.today():%Y-%m-%d} 00:00:00"
 
     data = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status", {"status": "cancelled"}))
     assert data["status"] == "cancelled"
     assert data["completed_at"] is None
+
+
+def test_update_to_completed_uses_day_granularity(api, make_task):
+    """通过更新接口直接置为已完成时，完成时间同样是当天零点。"""
+
+    task = make_task()
+    data = api.data(api.put(f"/api/v1/maintenance-tasks/{task.id}",
+                            task_payload(task.green_space_id, status="completed")))
+    assert data["status"] == "completed"
+    assert data["completed_at"] == f"{date.today():%Y-%m-%d} 00:00:00"
+
+
+def test_manual_completion_keeps_record_derived_date(api, make_task, make_record):
+    """记录联动完成的任务，再次手动标记完成时保留作业日期口径。"""
+
+    task = make_task()
+    make_record(task=task, quality_result="qualified", record_date=date(2026, 3, 12))
+    detail = api.data(api.get(f"/api/v1/maintenance-tasks/{task.id}"))
+    assert detail["status"] == "completed"
+    assert detail["completed_at"] == "2026-03-12 00:00:00"
+
+    data = api.data(api.patch(f"/api/v1/maintenance-tasks/{task.id}/status",
+                              {"status": "completed"}))
+    assert data["completed_at"] == "2026-03-12 00:00:00"
 
 
 def test_cannot_complete_task_with_unqualified_record(api, make_task, make_record):

@@ -1,14 +1,12 @@
 """养护记录业务逻辑。"""
 
-from datetime import datetime, time
-
 from sqlalchemy import func, or_
 
 from ..constants import QUALITY_RESULT
 from ..errors import ConflictError, ValidationError
 from ..extensions import db
 from ..models import GreenSpace, MaintenanceRecord, MaintenanceTask, PlantReplacement
-from ..utils.dates import format_date
+from ..utils.dates import day_start, format_date
 from ..utils.numbers import to_float
 from ..utils.sorting import parse_sort
 from .base_service import BaseService
@@ -84,7 +82,11 @@ class MaintenanceRecordService(BaseService):
     # ------------------------------------------------------------ 任务状态联动
     @classmethod
     def sync_task_status(cls, task_id, *, task=None):
-        """按该任务下的全部养护记录重新推算任务状态。"""
+        """按该任务下的全部养护记录重新推算任务状态。
+
+        完成时间口径：以最新养护日期（当天零点）为准，与手动标记完成
+        写入的日期粒度保持一致。
+        """
 
         if task is None:
             if not task_id:
@@ -111,7 +113,7 @@ class MaintenanceRecordService(BaseService):
         if qualified and not unqualified:
             task.status = "completed"
             latest = max(item.record_date for item in records)
-            task.completed_at = datetime.combine(latest, time.min)
+            task.completed_at = day_start(latest)
         else:
             task.status = "in_progress"
             task.completed_at = None

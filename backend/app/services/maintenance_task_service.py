@@ -7,8 +7,7 @@ from ..errors import ConflictError, ValidationError
 from ..extensions import db
 from ..models import GreenSpace, MaintenanceRecord, MaintenanceTask, PlantReplacement
 from ..models.maintenance_task import OPEN_STATUSES
-from ..models.mixins import utcnow
-from ..utils.dates import format_date, today
+from ..utils.dates import day_start, format_date, today
 from ..utils.numbers import to_float
 from ..utils.sorting import parse_sort
 from .base_service import BaseService
@@ -45,11 +44,14 @@ class MaintenanceTaskService(BaseService):
 
     @classmethod
     def apply_derived(cls, instance):
-        """状态与完成时间保持一致：完成即写入完成时间，撤销完成即清空。"""
+        """状态与完成时间保持一致：完成即写入完成时间，撤销完成即清空。
+
+        完成时间统一为日期口径（当天零点），与养护记录联动写入的口径一致。
+        """
 
         if instance.status == "completed":
             if instance.completed_at is None:
-                instance.completed_at = utcnow()
+                instance.completed_at = day_start()
         else:
             instance.completed_at = None
 
@@ -162,7 +164,8 @@ class MaintenanceTaskService(BaseService):
         """手动流转任务状态。
 
         规则：存在不合格养护记录时不允许直接标记完成，需先整改；
-        标记完成会写入完成时间，撤销完成则清空完成时间。
+        标记完成会写入完成时间（当天零点，与记录联动口径一致；
+        已有作业日期口径的完成时间则保留不覆盖），撤销完成则清空完成时间。
         """
 
         task = cls.get(obj_id)
@@ -184,7 +187,7 @@ class MaintenanceTaskService(BaseService):
                 raise ConflictError(
                     f"该任务存在 {unqualified} 条不合格养护记录，请整改复检合格后再标记完成"
                 )
-            task.completed_at = task.completed_at or utcnow()
+            task.completed_at = task.completed_at or day_start()
         else:
             task.completed_at = None
 

@@ -1,6 +1,6 @@
 """日期解析与序列化辅助。"""
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 
 def parse_date(value, field_label="日期"):
@@ -42,3 +42,18 @@ def format_datetime(value):
 
 def today():
     return datetime.now().date()
+
+
+def day_start(value=None):
+    """完成时间的统一口径：日期粒度，返回指定日期（默认今天）当天零点。
+
+    completed_at 只精确到日：有养护记录的任务以最新养护日期为准，
+    无记录的任务以操作当天为准，不再写入具体时分秒，保证同一任务
+    无论走哪条路径、在当天哪个时刻操作，归属月份都唯一确定。
+    """
+
+    if value is None:
+        value = today()
+    if isinstance(value, datetime):
+        value = value.date()
+    return datetime.combine(value, time.min)

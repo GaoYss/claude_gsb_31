@@ -63,7 +63,22 @@ def test_qualified_record_completes_task(api, make_task):
     })
     detail = api.data(api.get(f"/api/v1/maintenance-tasks/{task.id}"))
     assert detail["status"] == "completed"
-    assert detail["completed_at"].startswith("2026-03-12")
+    # 完成时间以最新养护日期为准（当天零点）
+    assert detail["completed_at"] == "2026-03-12 00:00:00"
+
+
+def test_completion_month_follows_record_date(api, make_task):
+    """跨零点/跨月提交：完成月份由养护日期决定，与录入时刻无关。"""
+
+    task = make_task()
+    api.post("/api/v1/maintenance-records", {
+        "task_id": task.id,
+        "record_date": "2026-03-31",
+        "work_content": "月末修剪作业，次日凌晨补录",
+        "quality_result": "qualified",
+    })
+    detail = api.data(api.get(f"/api/v1/maintenance-tasks/{task.id}"))
+    assert detail["completed_at"] == "2026-03-31 00:00:00"
 
 
 def test_unqualified_record_blocks_task_completion(api, make_task):
